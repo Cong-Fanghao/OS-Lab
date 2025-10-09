@@ -68,29 +68,104 @@ aupic t0,0x0将当前PC高20位加载到寄存器t0中，为后续地址计算�
 这段代码是多核启动初始化代码的一部分，csrr a6, mhartid将读取当前硬件线程（hart）ID 到寄存器 a6，然后为hart0执行初始化等操作，是操作系统内核启动早期的多核初始化与内存地址设置部分。
 
 ### 控制权移交阶段
-跳过观看冗长的主初始化阶段，使用watch *0x80200000指令，设置观察点，监视内核的加载过程,但是这里单独使用观察点输入continue之后，程序一直处于运行状态，无法进行下一步操作。
+跳过观看冗长的主初始化阶段，使用watch *0x80200000指令，设置观察点，监视内核的加载过程,程序直接运行到最终init.c中的死循环，说明此处没有数据进入。
 
-这里，改为使用b *0x80200000指令设置断点进行研究，这个地址的指令是la sp, bootstacktop，也就是entry.s要执行的内核的第一条指令，说明抵达了操作系统内核的入口。
+改为使用b *0x80200000指令设置断点进行研究，这个地址的指令是la sp, bootstacktop，也就是entry.s要执行的内核的第一条指令，说明抵达了操作系统内核的入口。
 
 输入c开始执行，命令行出现
 ```
 Breakpoint 1, kern_entry () at kern/init/entry.S:7
 7           la sp, bootstacktop
 ```
-说明成功在断点处停止运行，此时输入 p/x,$sp 命令，得到$1 = 0x8001bd80，再次输入相同命令得到$2 = 0x80203000。
-$1是在进入 kern_entry 之前的栈指针，是 OpenSBI 或启动代码提供的临时栈。执行 la sp, bootstacktop 后的$2说明指令 la sp, bootstacktop 成功执行。现在 $sp 指向 内核启动栈顶（bootstacktop）。内核启动阶段，所有函数调用和局部变量都会使用这个栈。
-
-此时再次进行几步单词执行后，输入x/10i $pc命令，得到如下代码：
+说明成功在断点处停止运行。
+输入x/10i $pc命令，得到如下代码：
 ```
-0x8020000e <kern_init+4>:    addi    a0,a0,-2
+   0x80200000 <kern_entry>:     auipc   sp,0x3
+   0x80200004 <kern_entry+4>:   mv      sp,sp
+   0x80200008 <kern_entry+8>:   j       0x8020000a <kern_init>
+   0x8020000a <kern_init>:      auipc   a0,0x3
+   0x8020000e <kern_init+4>:    addi    a0,a0,-2
    0x80200012 <kern_init+8>:    auipc   a2,0x3
    0x80200016 <kern_init+12>:   addi    a2,a2,-10
    0x8020001a <kern_init+16>:   addi    sp,sp,-16
    0x8020001c <kern_init+18>:   li      a1,0
    0x8020001e <kern_init+20>:   sub     a2,a2,a0
-   0x80200020 <kern_init+22>:   sd      ra,8(sp)
-   0x80200022 <kern_init+24>:   jal     ra,0x802004ae <memset>
-   0x80200026 <kern_init+28>:   auipc   a1,0x0
-   0x8020002a <kern_init+32>:   addi    a1,a1,1178
 ```
-都利用kern_init+num的符号信息，在kern_init函数内偏移调用指令，证明内核开始运行
+可以清晰的看出此时的pc指针已经停在了我们需要的地方，也就说明pc寄存器值位于内核地址区间，说明内核代码已开始运行。
+不断输入si命令进行单行运行
+```
+(gdb) si
+0x0000000080200004 in kern_entry () at kern/init/entry.S:7
+7           la sp, bootstacktop
+(gdb) si
+9           tail kern_init
+(gdb) si
+0x000000008020000a in kern_init ()
+(gdb) si
+0x000000008020000e in kern_init ()
+(gdb) si
+0x0000000080200012 in kern_init () at kern/init/init.c:8
+8           memset(edata, 0, end - edata);
+(gdb) si
+0x0000000080200016      8           memset(edata, 0, end - edata);
+(gdb) si
+0x000000008020001a      6       int kern_init(void) {
+(gdb) si
+0x0000000080200016      8           memset(edata, 0, end - edata);
+(gdb) si
+0x000000008020001a      6       int kern_init(void) {
+(gdb) si
+(gdb) si
+0x000000008020001a      6       int kern_init(void) {
+(gdb) si
+0x000000008020001a      6       int kern_init(void) {
+(gdb) si
+(gdb) si
+0x000000008020001c      8           memset(edata, 0, end - edata);
+(gdb) si
+0x000000008020001c      8           memset(edata, 0, end - edata);
+(gdb) si
+(gdb) si
+0x000000008020001e      8           memset(edata, 0, end - edata);
+0x000000008020001e      8           memset(edata, 0, end - edata);
+(gdb) si
+(gdb) si
+0x0000000080200020      6       int kern_init(void) {
+(gdb) si
+0x0000000080200022      8           memset(edata, 0, end - edata);
+(gdb) si
+memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+(gdb) si
+0x0000000080200022      8           memset(edata, 0, end - edata);
+(gdb) si
+memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+0x0000000080200022      8           memset(edata, 0, end - edata);
+(gdb) si
+memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+(gdb) si
+memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+275         while (n -- > 0) {
+(gdb) si
+memset (s=0x80203008, c=c@entry=0 '\000', n=0) at libs/string.c:275
+275         while (n -- > 0) {
+(gdb) si
+275         while (n -- > 0) {
+(gdb) si
+278         return s;
+(gdb) si
+(gdb) si
+278         return s;
+(gdb) si
+278         return s;
+(gdb) si
+kern_init () at kern/init/init.c:11
+(gdb) si
+kern_init () at kern/init/init.c:11
+kern_init () at kern/init/init.c:11
+11          cprintf("%s\n\n", message);
+11          cprintf("%s\n\n", message);
+(gdb) si
+(gdb) si
+0x000000008020002a      11          cprintf("%s\n\n", message);
+```
+左侧make debug 界面显示“(THU.CST) os is loading ...”说明内核的汇编初始化（entry.S）已经完成，已成功进入 C 语言部分，系统初始化开始运行。
