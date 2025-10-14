@@ -1,6 +1,6 @@
-#include <pmm.h>
-#include <list.h>
-#include <string.h>
+#include<pmm.h>
+#include<list.h>
+#include<string.h>
 #include <default_pmm.h>
 
 /* In the first fit algorithm, the allocator keeps a list of free blocks (known as the free list) and,
@@ -54,29 +54,40 @@
  *               (5.2) reset the fields of pages, such as p->ref, p->flags (PageProperty)
  *               (5.3) try to merge low addr or high addr blocks. Notice: should change some pages's p->property correctly.
  */
+
+//全局空闲区管理结构体
 static free_area_t free_area;
 
-#define free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
+#define free_list (free_area.free_list)  //空闲块链表头
+#define nr_free (free_area.nr_free)      //空闲页总数
 
 static void
 default_init(void) {
-    list_init(&free_list);
-    nr_free = 0;
+    list_init(&free_list);//初始化空闲页链表为空
+    nr_free = 0;//空闲页总数置为0
 }
 
+//初始化过程
+//把一段物理页[base,base+n]加入空闲链表
+//是first-fit的准备工作，每个空闲页都维护在链表里面
 static void
 default_init_memmap(struct Page *base, size_t n) {
     assert(n > 0);
+
+    //对每一页进行初始化
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(PageReserved(p));
         p->flags = p->property = 0;
         set_page_ref(p, 0);
     }
+
+    //第一页作为空闲块首页
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
+
+    //插入空闲链表（按地址升序）
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
     } else {
@@ -93,45 +104,63 @@ default_init_memmap(struct Page *base, size_t n) {
     }
 }
 
+//分配连续n页
 static struct Page *
 default_alloc_pages(size_t n) {
     assert(n > 0);
+
+    //空闲页不足的话直接返回null
     if (n > nr_free) {
         return NULL;
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
+
+    //从链表头开始遍历查找，寻找第一个property>=n的块
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {
-            page = p;
+            page = p; //表示找到
             break;
         }
     }
+
     if (page != NULL) {
+        //从链表中删除当前块
         list_entry_t* prev = list_prev(&(page->page_link));
         list_del(&(page->page_link));
+
+        //如果块比请求大，拆分剩余部分，加入链表
         if (page->property > n) {
-            struct Page *p = page + n;
-            p->property = page->property - n;
-            SetPageProperty(p);
-            list_add(prev, &(p->page_link));
+            struct Page *p = page + n;        //剩余块起始页
+            p->property = page->property - n; //剩余长度
+            SetPageProperty(p);               //标记为首页
+            list_add(prev, &(p->page_link));  //插入链表
         }
+
+        //更新空闲页总数
         nr_free -= n;
+        
+        // 清楚分配页的property标记
         ClearPageProperty(page);
     }
     return page;
 }
 
+//释放连续n页
 static void
 default_free_pages(struct Page *base, size_t n) {
     assert(n > 0);
+
+    //释放页标记
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
         set_page_ref(p, 0);
     }
+
+    //标记首页并加入链表
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
@@ -151,6 +180,7 @@ default_free_pages(struct Page *base, size_t n) {
         }
     }
 
+    //尝试与低地址块合并
     list_entry_t* le = list_prev(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);
@@ -161,7 +191,9 @@ default_free_pages(struct Page *base, size_t n) {
             base = p;
         }
     }
+    
 
+    //尝试与高地址块合并
     le = list_next(&(base->page_link));
     if (le != &free_list) {
         p = le2page(le, page_link);
@@ -173,11 +205,13 @@ default_free_pages(struct Page *base, size_t n) {
     }
 }
 
+//返回空闲页数
 static size_t
 default_nr_free_pages(void) {
     return nr_free;
 }
 
+//功能测试，验证页分配与释放是否正常
 static void
 basic_check(void) {
     struct Page *p0, *p1, *p2;
@@ -231,6 +265,8 @@ basic_check(void) {
 
 // LAB2: below code is used to check the first fit allocation algorithm (your EXERCISE 1) 
 // NOTICE: You SHOULD NOT CHANGE basic_check, default_check functions!
+
+//针对First-Fit分配算法的完整功能检查
 static void
 default_check(void) {
     int count = 0, total = 0;
@@ -294,6 +330,7 @@ default_check(void) {
     assert(total == 0);
 }
 
+//PMM管理器接口定义
 const struct pmm_manager default_pmm_manager = {
     .name = "default_pmm_manager",
     .init = default_init,
