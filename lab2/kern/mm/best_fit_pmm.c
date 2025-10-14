@@ -93,7 +93,7 @@ best_fit_init_memmap(struct Page *base, size_t n) {
             // 编写代码
             // 1、当base < page时，找到第一个大于base的页，将base插入到它前面，并退出循环
             // 2、当list_next(le) == &free_list时，若已经到达链表结尾，将base插入到链表尾部
-            if (base < page) {
+            if (base->property < page->property) {
                 list_add_before(le, &(base->page_link));
                 break;
             } else if (list_next(le) == &free_list) {
