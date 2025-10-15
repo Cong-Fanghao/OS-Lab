@@ -74,6 +74,31 @@ first-fit 连续物理内存分配算法作为物理内存分配一个很基础的方法，需要同学们理解它
 
 
 ## Best-Fit 实现过程
+Best-Fit 主要功能由三个函数来实现：
+- best_fit_init_memmap
+- best_fit_alloc_pages
+- best_fit_nr_free_pages
+
+分别实现空闲链表的初始化，页的分配，页的释放与合并功能，下面将详细对每个函数实现进行说明
+
+### best_fit_init_memmap
+这个函数主要实现了初始化页的标志属性，设置内存页的属性，以及将页插入空闲链表合适位置的操作。
+下列代码与原来的first_fit保持一致，清空了页框的标志和属性，将页框的引用计数设置为0：
+```
+p->flags = p->property = 0;
+set_page_ref(p, 0);
+```
+下列代码则实现了对空闲链表的处理，在判断完列表不为空后，采用best_fit策略来插入base：
+遍历链表，查找第一个页框的大小大于当前 base->property 的位置，如果找到了合适位置，插入到链表中，如果遍历到链表尾部，说明 base 是最大的页框，将它插入到尾部。这里与first_fit有着关键的不同点，原来的代码‘base < page’比较的是物理地址的大小，也就是在内存上的先后顺序，而比较property则可以对页进行大小的排序。
+```
+if (base->property < page->property) {
+   list_add_before(le, &(base->page_link));
+   break;}
+else if (list_next(le) == &free_list) {
+list_add(le, &(base->page_link));
+}
+```
+
 
 ## 拓展练习
 
