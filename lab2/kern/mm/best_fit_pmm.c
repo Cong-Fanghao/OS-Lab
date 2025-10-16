@@ -152,7 +152,11 @@ best_fit_free_pages(struct Page *base, size_t n) {
     /*LAB2 EXERCISE 2: YOUR CODE*/ 
     // 编写代码
     // 具体来说就是设置当前页块的属性为释放的页块数、并将当前页块标记为已分配状态、最后增加nr_free的值
-
+     base->property = n;
+    // 标记为空闲页块
+    SetPageProperty(base);
+    // 增加空闲页块数
+    nr_free += n;
 
     if (list_empty(&free_list)) {
         list_add(&free_list, &(base->page_link));
@@ -179,7 +183,13 @@ best_fit_free_pages(struct Page *base, size_t n) {
         // 3、清除当前页块的属性标记，表示不再是空闲页块
         // 4、从链表中删除当前页块
         // 5、将指针指向前一个空闲页块，以便继续检查合并后的连续空闲页块
-
+        if (p + p->property == base) {
+            // 合并
+            p->property += base->property;
+            ClearPageProperty(base);
+            list_del(&(base->page_link));
+            base = p; // 指针指向合并后的页块，便于后续与后面页块继续合并
+        }
     }
 
     le = list_next(&(base->page_link));
