@@ -1,4 +1,5 @@
 # Lab2 物理内存与页表 实验报告
+**小组成员：丛方昊_2310682、钱展飞_2312479、李泽昊_2312594**
 
 ## 任务描述
 - 练习1：理解first-fit 连续物理内存分配算法
@@ -77,7 +78,7 @@ first-fit 连续物理内存分配算法作为物理内存分配一个很基础的方法，需要同学们理解它
 Best-Fit 主要功能由三个函数来实现：
 - best_fit_init_memmap
 - best_fit_alloc_pages
-- best_fit_nr_free_pages
+- best_fit_free_pages
 
 分别实现空闲链表的初始化，页的分配，页的释放与合并功能，下面将详细对每个函数实现进行说明
 
@@ -89,7 +90,7 @@ p->flags = p->property = 0;
 set_page_ref(p, 0);
 ```
 下列代码则实现了对空闲链表的处理，在判断完列表不为空后，采用best_fit策略来插入base：
-遍历链表，查找第一个页框的大小大于当前 base->property 的位置，如果找到了合适位置，插入到链表中，如果遍历到链表尾部，说明 base 是最大的页框，将它插入到尾部。这里与first_fit有着关键的不同点，原来的代码‘base < page’比较的是物理地址的大小，也就是在内存上的先后顺序，而比较property则可以对页进行大小的排序。
+遍历链表，按照物理地址排序，把块插入到链表中，如果遍历到链表尾部，说明 base 是最大的页框，将它插入到尾部。这里根据注释部分的要求，保持和first_fit相同的视线方式，使用‘base < page’直接比较的是物理地址的大小，也就是在内存上的先后顺序，在分配的过程中，它需要遍历整个链表，时间复杂度会比较大，但是，这样的排序对合并是友好。我们先使用以下的代码，稍后会在改良中使用另一种优化方法。
 ```
 if (base->property < page->property) {
    list_add_before(le, &(base->page_link));
@@ -98,6 +99,85 @@ else if (list_next(le) == &free_list) {
 list_add(le, &(base->page_link));
 }
 ```
+
+### best_fit_alloc_pages
+这个函数主要实现best-fit算法的分配策略，找到满足需求的最小空闲块进行分配。
+
+first-fit找到第一个满足块即停止，但是best-fit必须遍历整个链表找到最小满足块，因此break跳出的条件不同。在遍历过程中，记录最小满足要求的块大小并不断更新，直到遍历完全得到满足要求的最小块。
+
+```
+while ((le = list_next(le)) != &free_list){
+    struct Page *p = le2page(le, page_link);
+    if (p->property >= n && p->property < min_size) {
+        min_size = p->property;
+        page = p;
+    }
+}
+```
+
+在得到最小块后，又面临一个新的问题，这个块的可能会面对拆分，如果不需要拆分，让上一个块首指向下一个块首就可以了，而如果需要拆分，那么就需要把剩余部分仍然按照物理地址排序的方式放在相应位置，而拆下这个块的时候，作为原块的一部分，剩余部分的首地址仍然在原块的前后两块之间，因此需要做的就是计算剩余块的大小和剩余页目的大小，把剩余部分仍然放到原块的前后块之间，我们用下面的代码实现：
+
+```
+if (page != NULL) {
+    list_entry_t* prev = list_prev(&(page->page_link));
+    list_del(&(page->page_link));
+    if (page->property > n) {
+        struct Page *p = page + n;
+        p->property = page->property - n;
+        SetPageProperty(p);
+        list_add(prev, &(p->page_link));
+    }
+    nr_free -= n;
+    ClearPageProperty(page);
+}
+```
+
+### best_fit_free_pages
+这个函数需要处理页面的释放，也就是把块重新接入到链表中。这时，首先需要设置释放块的属性，包括大小和标记，然后按照物理地址的顺序，把它插入到物理页表之中，除去这个新插入的块，链表是物理地址顺序排序的，因此第一次找到比它物理地址大的块首时，就已经找到了这个释放块的位置：
+
+```
+if (list_empty(&free_list)) {
+    list_add(&free_list, &(base->page_link));
+} else {
+    list_entry_t* le = &free_list;
+    while ((le = list_next(le)) != &free_list) {
+        struct Page* page = le2page(le, page_link);
+        if (base < page) {
+            list_add_before(le, &(base->page_link));
+            break;
+        } else if (list_next(le) == &free_list) {
+            list_add(le, &(base->page_link));
+        }
+    }
+}
+```
+
+最后就是要完成块的合并：在原来的链表没有需要合并的块的时候（这里原来的链表也是由经过若干次分配和释放得到的，因此数学归纳也满足相同的性质），只需要考虑新插入链表的块的合并即可。因为本身链表中的块就是物理地址排序的，只需要考虑新插入的块与前后块的合并即可，如果紧邻就合并，实现这个功能的代码如下：
+
+```
+if (p + p->property == base) {
+    p->property += base->property;
+    ClearPageProperty(base);
+    list_del(&(base->page_link));
+    base = p;
+}
+```
+
+### 运行结果
+当完成上面的代码修改后，使用make grade指令执行代码，得到如下的输出：
+```
+>>>>>>>>>> here_make>>>>>>>>>>>
+gmake[1]: 进入目录“/home/cong/OS/labcode/lab2” + cc kern/init/entry.S + cc kern/init/init.c + cc kern/libs/stdio.c + cc kern/debug/panic.c + cc kern/driver/console.c + cc kern/driver/dtb.c + cc kern/mm/best_fit_pmm.c + cc kern/mm/default_pmm.c + cc kern/mm/pmm.c + cc libs/printfmt.c + cc libs/readline.c + cc libs/sbi.c + cc libs/string.c + ld bin/kernel riscv64-unknown-elf-objcopy bin/kernel --strip-all -O binary bin/ucore.img gmake[1]: 离开目录“/home/cong/OS/labcode/lab2”
+>>>>>>>>>> here_make>>>>>>>>>>>
+<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<
+try to run qemu
+qemu pid=5270
+<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<
+  -check physical_memory_map_information:    OK
+  -check_best_fit:                           OK
+Total Score: 25/25
+```
+说明顺利实现best-fit代码。
 
 ## 拓展练习
 ### 硬件的可用物理内存范围的获取方法
