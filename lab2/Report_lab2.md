@@ -88,7 +88,7 @@ Best-Fit 主要功能由三个函数来实现：
 
 分别实现空闲链表的初始化，页的分配，页的释放与合并功能，下面将详细对每个函数实现进行说明
 
-### best_fit_init_memmap
+### 1.best_fit_init_memmap
 这个函数主要实现了初始化页的标志属性，设置内存页的属性，以及将页插入空闲链表合适位置的操作。
 下列代码与原来的first_fit保持一致，清空了页框的标志和属性，将页框的引用计数设置为0：
 ```
@@ -106,7 +106,7 @@ list_add(le, &(base->page_link));
 }
 ```
 
-### best_fit_alloc_pages
+### 2.best_fit_alloc_pages
 这个函数主要实现best-fit算法的分配策略，找到满足需求的最小空闲块进行分配。
 
 first-fit找到第一个满足块即停止，但是best-fit必须遍历整个链表找到最小满足块，因此break跳出的条件不同。在遍历过程中，记录最小满足要求的块大小并不断更新，直到遍历完全得到满足要求的最小块。
@@ -138,7 +138,7 @@ if (page != NULL) {
 }
 ```
 
-### best_fit_free_pages
+### 3.best_fit_free_pages
 这个函数需要处理页面的释放，也就是把块重新接入到链表中。这时，首先需要设置释放块的属性，包括大小和标记，然后按照物理地址的顺序，把它插入到物理页表之中，除去这个新插入的块，链表是物理地址顺序排序的，因此第一次找到比它物理地址大的块首时，就已经找到了这个释放块的位置：
 
 ```
@@ -186,8 +186,74 @@ Total Score: 25/25
 说明顺利实现best-fit代码。
 
 ### 算法的改进
+#### 按照块大小排序方式的视线
+改变链表排序策略，使用块大小从小到大排序，这样在分配内存时，找到的第一个满足要求的块即是目标块，相应的，合并算法则需要遍历整体代码，这里在下面给出需要更改的lab2：exercise代码部分：
 
+- part 1：将比较page和base的地址大小改为比较它们的property属性，按照释放块的大小把块放回到链表之中：
 
+```
+if (base->property < page->property) {
+    list_add_before(le, &(base->page_link));
+    break;
+}
+```
+
+- part 2：在分配页表时，遇到的第一个块就是符合要求的块，可以停止，如果遇到了需要拆分的块，原本地址排序的代码只需要把剩余部分放到原本块的位置即可，现在需要对链表进行遍历从而把它放在合适的位置：
+
+```
+while ((le = list_next(le)) != &free_list) {
+    struct Page *p = le2page(le, page_link);
+    if (p->property >= n) {
+        page = p;
+        break;
+    }
+}
+
+if (list_empty(&free_list)) {
+    list_add(&free_list, &(p->page_link));
+} else {
+    list_entry_t* le = &free_list;
+    while ((le = list_next(le)) != &free_list) {
+        struct Page* page = le2page(le, page_link);
+        if (p->property < page->property) {
+            list_add_before(le, &(p->page_link));
+            break;
+        } else if (list_next(le) == &free_list) {
+            list_add(le, &(p->page_link));
+        }
+    }
+}
+```
+
+- part 3：合并时，原本的物理地址排序方式只需要对考虑插入块与相邻块的合并可能，现在需要遍历整个链表去找到离插入块最临近的物理地址的块，再判断是否有无向前或向后合并可能：
+
+```
+while ((le = list_next(le)) != &free_list) {
+    struct Page* candidate = le2page(le, page_link);
+    if (candidate == base) continue;
+    
+    if (candidate + candidate->property == base) {
+        candidate->property += base->property;
+        ClearPageProperty(base);
+        list_del(&(base->page_link));
+        base = candidate;
+        merged = true;
+        break;
+    }
+    if (base + base->property == candidate) {
+        base->property += candidate->property;
+        ClearPageProperty(candidate);
+        list_del(&(candidate->page_link));
+        merged = true;
+        break;
+    }
+}
+```
+
+#### 进一步优化
+我们注意到，使用块排序后主要开销从分配时的遍历变成了合并时的遍历，因此我们可以选择更好的合并策略，如延迟合并，去降低这一部分的平均损耗。
+
+此外，可以进一步改变排序策略，链表的每一项都是一个链表头，第一个链表头连着所有块大小等于1页的块，第二个链表头连着所有块大小等于2页的块，以此类推，对块大小的可能性加以限制之后，这样就可以一步实现块的分配与释放，大大减少遍历带来的消耗。
 
 ## 拓展练习
 ### 硬件的可用物理内存范围的获取方法
