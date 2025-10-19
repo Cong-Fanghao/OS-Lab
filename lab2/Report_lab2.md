@@ -257,7 +257,7 @@ while ((le = list_next(le)) != &free_list) {
 
 ## 拓展练习
 
-### Buddy System 内存管理算法设计文档
+### 一.Buddy System 内存管理算法设计文档
 
 #### 概述
 
@@ -391,7 +391,7 @@ const struct pmm_manager buddy_system_pmm_manager = {
 
 
 
-### 硬件的可用物理内存范围的获取方法
+### 二.硬件的可用物理内存范围的获取方法
 在 ucore中，操作系统获取可用物理内存的方式是通过解析QEMU提供的DTB（Device Tree Blob），DTB中包含内存起始地址和大小信息。内核启动时，会根据DTB初始化空闲页链表，构建物理内存管理器（PMM）。
 如果没有DTB或固件提供信息，操作系统可以通过逐页探测内存或读取特定硬件寄存器的方法来获取物理内存范围，但这种方法在实验环境中不推荐，因为可能访问非法地址造成异常。
 
