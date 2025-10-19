@@ -354,31 +354,40 @@ brkfun=
 #     '100 ticks'                                                 \
 #     'End of Test.'
 
-echo "<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<"
+# echo "<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<"
+# run_qemu
+# echo "<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<"
+
+# # pts=5
+# # quick_check 'check physical_memory_map_information'                                         \
+# #     'memory management: best_fit_pmm_manager'                     \
+# #     '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'                                  \
+
+# # pts=20
+# # quick_check 'check_best_fit'                                       \
+# #     'check_alloc_page() succeeded!'                                  \
+# #     'satp virtual address: 0xffffffffc0204000'                       \
+# #     'satp physical address: 0x0000000080204000'                      \
+
+# show_final
+
+
+echo "<<<<<<<<<<<<<<< buddy system test <<<<<<<<<<<<<<<<<<" 
+
 run_qemu
-echo "<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<"
-
-# pts=5
-# quick_check 'check physical_memory_map_information'                                         \
-#     'memory management: best_fit_pmm_manager'                     \
-#     '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'                                  \
-
-# pts=20
-# quick_check 'check_best_fit'                                       \
-#     'check_alloc_page() succeeded!'                                  \
-#     'satp virtual address: 0xffffffffc0204000'                       \
-#     'satp physical address: 0x0000000080204000'                      \
 
 pts=5
-quick_check 'check physical_memory_map_information' \
-    'memory management: buddy_system_pmm_manager' \
-    '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'
+quick_check 'check buddy_pmm_manager' \
+    'memory management: buddy_pmm_manager'
 
-# pts=5
-# quick_check 'check ticks'                                       \
-#    '++ setup timer interrupts'                                 \
-#    '100 ticks'                                                 \
+pts=15
+quick_check 'check_buddy_alloc' \
+    'check_alloc_page() succeeded!' \
+    'check_free_page() succeeded!'
 
-## print final-score
+pts=10
+quick_check 'check_buddy_merge_split' \
+    'buddy: split order' \
+    'buddy: merge order'
+
 show_final
-
