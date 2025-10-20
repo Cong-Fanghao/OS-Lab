@@ -354,40 +354,36 @@ brkfun=
 #     '100 ticks'                                                 \
 #     'End of Test.'
 
-# echo "<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<"
-# run_qemu
-# echo "<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<"
-
-# # pts=5
-# # quick_check 'check physical_memory_map_information'                                         \
-# #     'memory management: best_fit_pmm_manager'                     \
-# #     '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'                                  \
-
-# # pts=20
-# # quick_check 'check_best_fit'                                       \
-# #     'check_alloc_page() succeeded!'                                  \
-# #     'satp virtual address: 0xffffffffc0204000'                       \
-# #     'satp physical address: 0x0000000080204000'                      \
-
-# show_final
-
-
-echo "<<<<<<<<<<<<<<< buddy system test <<<<<<<<<<<<<<<<<<" 
-
+echo "<<<<<<<<<<<<<<< here_run_qemu <<<<<<<<<<<<<<<<<<"
 run_qemu
+echo "<<<<<<<<<<<<<<< here_run_check <<<<<<<<<<<<<<<<<<"
 
 pts=5
-quick_check 'check buddy_pmm_manager' \
-    'memory management: buddy_pmm_manager'
+quick_check 'check physical_memory_map_information'                                         \
+    'memory management: best_fit_pmm_manager'                     \
+    '  memory: 0x0000000008000000, [0x0000000080000000, 0x0000000087ffffff].'                                  \
 
-pts=15
-quick_check 'check_buddy_alloc' \
-    'check_alloc_page() succeeded!' \
-    'check_free_page() succeeded!'
-
-pts=10
-quick_check 'check_buddy_merge_split' \
-    'buddy: split order' \
-    'buddy: merge order'
+pts=20
+quick_check 'check_best_fit'                                       \
+    'check_alloc_page() succeeded!'                                  \
+    'satp virtual address: 0xffffffffc0204000'                       \
+    'satp physical address: 0x0000000080204000'                      \
 
 show_final
+
+
+# echo "<<<<<<<<<<<<<<< buddy system test <<<<<<<<<<<<<<<<<<" 
+
+# echo "<<<<<<<<<<<<<<< buddy system test <<<<<<<<<<<<<<<<<<"
+
+# run_qemu
+
+# pts=5
+# quick_check 'check buddy_system_pmm_manager' \
+#     'memory management: buddy_system_pmm_manager'
+
+# pts=15
+# quick_check 'check_buddy_system_alloc' \
+#     'check_alloc_page() succeeded!' \
+
+# show_final
