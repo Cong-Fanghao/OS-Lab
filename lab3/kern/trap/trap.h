@@ -3,6 +3,7 @@
 
 #include <defs.h>
 
+//保存Trap时所有通用寄存器的值
 struct pushregs {
     uintptr_t zero;  // Hard-wired zero
     uintptr_t ra;    // Return address
@@ -38,15 +39,16 @@ struct pushregs {
     uintptr_t t6;    // Temporary
 };
 
+//表示陷入内核时CPU的完整上下文（寄存器状态+控制寄存器）
 struct trapframe {
-    struct pushregs gpr;
-    uintptr_t status;
-    uintptr_t epc;
-    uintptr_t badvaddr;
-    uintptr_t cause;
+    struct pushregs gpr;//通用寄存器状态
+    uintptr_t status;   //保存当时的CSR控制状态寄存器内容（描述当前特权级，中断状态等）
+    uintptr_t epc;      //保存陷入前执行的指令地址，处理完后从这里返回
+    uintptr_t badvaddr; 
+    uintptr_t cause;    //表示中断原因，高位表示是否中断
 };
 
-void trap(struct trapframe *tf);
+void trap(struct trapframe *tf);//主 trap 处理函数。当系统发生中断或异常时，汇编入口 trapentry.S 会构造一个 trapframe，然后调用此函数进行具体处理。
 void idt_init(void);
 void print_trapframe(struct trapframe *tf);
 void print_regs(struct pushregs* gpr);
