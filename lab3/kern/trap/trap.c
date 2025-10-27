@@ -102,8 +102,8 @@ void print_regs(struct pushregs *gpr) {
     cprintf("  t6       0x%08x\n", gpr->t6);
 }
 
-static volatile uint64_t ticks=0;
-static volatile int num=0;
+
+volatile size_t num=0;
 
 void interrupt_handler(struct trapframe *tf) {
     intptr_t cause = (tf->cause << 1) >> 1;
