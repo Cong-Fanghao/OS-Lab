@@ -163,3 +163,10 @@ SAVE_ALL中寄存器保存位置由trapframe结构体定义和trapentry.S中设�
 csrw sscratch, sp将当前栈指针保存到sscratch寄存器，也就是此时sscratch包含进入陷阱时的栈指针值；csrrw s0, sscratch, x0读取sscratch到s0，同时将x0（0）写入sscratch，结果是s0= 原栈指针，sscratch= 0。这样，就将进入陷阱时的栈指针安全保存到s0寄存器，将sscratch清零，作为"来自内核态"的标志，如果发生嵌套陷阱，可以通过检查sscratch判断来源。
 
 保存CSR是为了进行中断的分析和逻辑判断，不恢复的原因是这些CSR寄存器在陷阱发生时由硬件自动设置，在陷阱返回时由硬件自动失效或由软件显式处理。
+
+## 中断实验知识点分析
+- 中断向量表与陷阱处理入口
+通过idt_init()设置stvec寄存器指向__alltraps，对应OS原理——中断描述符表
+- 上下文保存与恢复机制
+SAVE_ALL/RESTORE_ALL宏保存所有寄存器到栈帧，对应OS中的进程/线程上下文切换
+- OS原理重要但实验未覆盖的知识点：中断优先级与嵌套中断，实时性考虑与中断延迟，原子操作中禁用中断的情况。
