@@ -4,8 +4,16 @@
 ## 任务描述
 - 练习1：完善中断处理 
 请编程完善trap.c中的中断处理函数trap，在对时钟中断进行处理的部分填写kern/trap/trap.c函数中处理时钟中断的部分，使操作系统每遇到100次时钟中断后，调用print_ticks子程序，向屏幕上打印一行文字”100 ticks”，在打印完10行后调用sbi.h中的shut_down()函数关机。
+要求完成问题1提出的相关函数实现，提交改进后的源代码包（可以编译执行），并在实验报告中简要说明实现过程和定时器中断中断处理的流程。实现要求的部分代码后，运行整个系统，大约每1秒会输出一次”100 ticks”，输出10行。
 
-要求完成问题1提出的相关函数实现，提交改进后的源代码包（可以编译执行），并在实验报告中简要说明实现过程和定时器中断中断处理的流程。实现要求的部分代码后，运行整个系统，大约每1秒会输出一次”100 ticks”，输出10行。  
+- 扩展练习 Challenge1：描述与理解中断流程
+回答：描述ucore中处理中断异常的流程（从异常的产生开始），其中mov a0，sp的目的是什么？SAVE_ALL中寄寄存器保存在栈中的位置是什么确定的？对于任何中断，__alltraps 中都需要保存所有寄存器吗？请说明理由。
+
+- 扩增练习 Challenge2：理解上下文切换机制
+回答：在trapentry.S中汇编代码 csrw sscratch, sp；csrrw s0, sscratch, x0实现了什么操作，目的是什么？save all里面保存了stval scause这些csr，而在restore all里面却不还原它们？那这样store的意义何在呢？
+
+- 扩展练习Challenge3：完善异常中断
+编程完善在触发一条非法指令异常和断点异常，在 kern/trap/trap.c的异常处理函数中捕获，并对其进行处理，简单输出异常类型和异常指令触发地址，即“Illegal instruction caught at 0x(地址)”，“ebreak caught at 0x（地址）”与“Exception type:Illegal instruction"，“Exception type: breakpoint”。
 
 ## 中断处理
 ### 中断和异常处理的核心要点：
@@ -141,3 +149,17 @@ satp physical address: 0x0000000080206000
 100 ticks
 100 ticks
 100 ticks
+
+## 描述与理解中断流程
+中断产生时，CPU自动保存当前寄存器的关键信息，包括：保存PC至sepc，保存原因至scause，保存附加信息到stval，保存特权级到sstatus.SPP，而后切换到S模式，关闭中断，接下来跳转到中断向量表基址开始处理中断，也就是进入到了__alltraps。
+
+首先SAVE_ALL保存所有寄存器，然后使用mov a0, sp。这里sp指向内核栈上的trapframe结构，RISC-V调用约定中，a0寄存器用于传递第一个参数，C函数原型是void trap(struct trapframe *tf)，这样C代码就能访问完整的寄存器状态进行诊断和处理。接下来就是jal trap调用函数。
+
+trap函数使用trap_dispatch分发处理，处理完成后用__trapret:RESTORE_ALL恢复寄存器，最后使用sret恢复PC和特权级。
+
+SAVE_ALL中寄存器保存位置由trapframe结构体定义和trapentry.S中设置的汇编偏移确定，其也必须保存所有寄存器，因为中断可能出现在任何位置，所有寄存器都可能有重要数据，而中断不应该改变被中断程序的任何状态。
+
+## 理解上下文切换机制
+csrw sscratch, sp将当前栈指针保存到sscratch寄存器，也就是此时sscratch包含进入陷阱时的栈指针值；csrrw s0, sscratch, x0读取sscratch到s0，同时将x0（0）写入sscratch，结果是s0= 原栈指针，sscratch= 0。这样，就将进入陷阱时的栈指针安全保存到s0寄存器，将sscratch清零，作为"来自内核态"的标志，如果发生嵌套陷阱，可以通过检查sscratch判断来源。
+
+保存CSR是为了进行中断的分析和逻辑判断，不恢复的原因是这些CSR寄存器在陷阱发生时由硬件自动设置，在陷阱返回时由硬件自动失效或由软件显式处理。
