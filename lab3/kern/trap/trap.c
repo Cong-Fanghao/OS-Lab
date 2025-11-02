@@ -185,7 +185,7 @@ void exception_handler(struct trapframe *tf) {
             */
             cprintf("Exception type: Illegal instruction\n");
             cprintf("Illegal instruction caught at 0x%08x\n", tf->epc);
-            tf->epc += 8;   // 跳过非法指令，防止陷入死循环
+            tf->epc += 4;   // 跳过非法指令，防止陷入死循环
             break;
         case CAUSE_BREAKPOINT:
             //断点异常处理
@@ -194,9 +194,9 @@ void exception_handler(struct trapframe *tf) {
              *(2)输出异常指令地址
              *(3)更新 tf->epc寄存器
              */
-            cprintf("Exception type: breakpoint\n");
+            cprintf("Exception type: breakpoint\n");///
             cprintf("ebreak caught at 0x%08x\n", tf->epc);
-            tf->epc += 8;//ebreak是2字节指令
+            tf->epc += 2;//ebreak是2字节指令
             break;
         case CAUSE_MISALIGNED_LOAD:
             break;
