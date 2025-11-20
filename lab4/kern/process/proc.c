@@ -83,6 +83,7 @@ void switch_to(struct context *from, struct context *to);
 
 // alloc_proc - alloc a proc_struct and init all fields of proc_struct
 static struct proc_struct *
+static struct proc_struct *
 alloc_proc(void)
 {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
@@ -105,10 +106,21 @@ alloc_proc(void)
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
         
+        proc->state = PROC_UNINIT;      // 设置进程状态为未初始化
+        proc->pid = -1;                 // 未分配PID，设置为-1
+        proc->runs = 0;                 // 运行时间/次数初始化为0
+        proc->kstack = 0;               // 内核栈地址暂时为0，后续由setup_kstack分配
+        proc->need_resched = 0;         // 不需要立即调度
+        proc->parent = NULL;            // 父进程暂时为空
+        proc->mm = NULL;                // 内存管理结构暂时为空（内核线程常为NULL）
+        memset(&(proc->context), 0, sizeof(struct context)); // 清空上下文结构，用于后续切换
+        proc->tf = NULL;                // 中断帧指针初始化为空
+        proc->pgdir = boot_pgdir_pa;    // 页目录表地址设为内核页目录表物理地址
+        proc->flags = 0;                // 标志位初始化
+        memset(proc->name, 0, PROC_NAME_LEN + 1); // 清空进程名
     }
     return proc;
 }
-
 // set_proc_name - set the name of proc
 char *
 set_proc_name(struct proc_struct *proc, const char *name)
