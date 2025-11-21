@@ -58,12 +58,12 @@ void proc_run(struct proc_struct *proc)
     if (proc != current)
     {
         bool  flag;
-        struct proc_struct* prve=current;
+        struct proc_struct* prev=current;
 
         local_intr_save(flag);
         current=proc;
         lastp(current->pgdir);
-        switch_to(&(prve->context),&(current->context));
+        switch_to(&(prev->context),&(current->context));
         local_intr_restore(flag);
 
     }

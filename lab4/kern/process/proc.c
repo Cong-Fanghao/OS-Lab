@@ -83,13 +83,12 @@ void switch_to(struct context *from, struct context *to);
 
 // alloc_proc - alloc a proc_struct and init all fields of proc_struct
 static struct proc_struct *
-static struct proc_struct *
 alloc_proc(void)
 {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL)
     {
-        // LAB4:EXERCISE1 YOUR CODE
+        // LAB4:EXERCISE1 2312594
         /*
          * below fields in proc_struct need to be initialized
          *       enum proc_state state;                      // Process state
@@ -106,18 +105,18 @@ alloc_proc(void)
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
         
-        proc->state = PROC_UNINIT;      // 设置进程状态为未初始化
-        proc->pid = -1;                 // 未分配PID，设置为-1
-        proc->runs = 0;                 // 运行时间/次数初始化为0
-        proc->kstack = 0;               // 内核栈地址暂时为0，后续由setup_kstack分配
-        proc->need_resched = 0;         // 不需要立即调度
-        proc->parent = NULL;            // 父进程暂时为空
-        proc->mm = NULL;                // 内存管理结构暂时为空（内核线程常为NULL）
-        memset(&(proc->context), 0, sizeof(struct context)); // 清空上下文结构，用于后续切换
-        proc->tf = NULL;                // 中断帧指针初始化为空
-        proc->pgdir = boot_pgdir_pa;    // 页目录表地址设为内核页目录表物理地址
-        proc->flags = 0;                // 标志位初始化
-        memset(proc->name, 0, PROC_NAME_LEN + 1); // 清空进程名
+        proc->state = PROC_UNINIT;
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = NULL;
+        proc->mm = NULL;
+        memset(&(proc->context), 0, sizeof(struct context));
+        proc->tf = NULL;
+        proc->pgdir = boot_pgdir_pa;
+        proc->flags = 0;
+        memset(proc->name, 0, PROC_NAME_LEN + 1);
     }
     return proc;
 }
@@ -187,7 +186,7 @@ void proc_run(struct proc_struct *proc)
 {
     if (proc != current)
     {
-        // LAB4:EXERCISE3 YOUR CODE
+        // LAB4:EXERCISE3 2312479
         /*
          * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
          * MACROs or Functions:
@@ -197,12 +196,12 @@ void proc_run(struct proc_struct *proc)
          *   switch_to():              Context switching between two processes
          */
         bool  flag;
-        struct proc_struct* prve=current;
+        struct proc_struct* prev=current;
 
         local_intr_save(flag);
         current=proc;
         lsatp(current->pgdir);
-        switch_to(&(prve->context),&(current->context));
+        switch_to(&(prev->context),&(current->context));
         local_intr_restore(flag);
 
     }
@@ -317,7 +316,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
         goto fork_out;
     }
     ret = -E_NO_MEM;
-    // LAB4:EXERCISE2 YOUR CODE
+    // LAB4:EXERCISE2 2310682
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
      * MACROs or Functions:
@@ -342,7 +341,25 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     //    5. insert proc_struct into hash_list && proc_list
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
-    
+    if ((proc = alloc_proc()) == NULL)
+        goto fork_out;
+
+    if (setup_kstack(proc) != 0)
+        goto bad_fork_cleanup_proc;
+
+    if (copy_mm(clone_flags, proc) != 0)
+        goto bad_fork_cleanup_kstack;
+
+    copy_thread(proc, stack, tf);
+
+    proc->pid = get_pid();
+    hash_proc(proc);
+    list_add(&proc_list, &(proc->list_link));
+    nr_process++;
+
+    wakeup_proc(proc);
+    ret = proc->pid;
+
 fork_out:
     return ret;
 
