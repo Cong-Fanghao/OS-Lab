@@ -201,7 +201,7 @@ void proc_run(struct proc_struct *proc)
 
         local_intr_save(flag);
         current=proc;
-        lastp(current->pgdir);
+        lsatp(current->pgdir);
         switch_to(&(prve->context),&(current->context));
         local_intr_restore(flag);
 
