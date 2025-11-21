@@ -49,10 +49,61 @@ context 与 tf 的含义与作用：
 proc_struct 中的 struct context context 和 struct trapframe *tf 都与保存进程状态有关。context 成员变量保存的是进程的内核上下文，其主要含义是记录进程在内核态停止执行时的关键寄存器状态，包括 ra、sp以及 s0 到 s11 等被调用者保存寄存器。它的作用在于支持进程调度过程中的上下文切换，当调度器调用 switch_to 函数时，会保存当前进程的上下文并恢复新进程的 context，从而使 CPU 的控制流跳转到 context.ra 指向的地址，在本实验中通过 copy_thread 设为 forkret 函数，并将栈切换到新进程的内核栈。而 tf 成员变量是指向进程内核栈顶部的中断帧指针，其含义是保存进程在发生中断、异常或系统调用瞬间的完整执行现场，包括程序计数器 epc、状态寄存器 status 和所有通用寄存器。它的作用在于控制进程具体的执行入口和参数传递，当进程通过 context 切换恢复运行并进入 forkret 函数后，系统会进一步调用 forkrets 将 tf 中保存的数据恢复到 CPU 寄存器中，对于新创建的内核线程，这会使 CPU 跳转到 tf->epc 所指向的 kernel_thread_entry 入口，并传递函数参数，从而真正开始执行线程定义的业务逻辑。简单来说，context 负责将 CPU 切换回进程所在的内核环境，而 tf 负责从内核环境“返回”到进程具体要执行的代码位置。
 
 ## 为新创建的内核线程分配资源
+具体实现代码如下
+```
+int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
+{
+    int ret = -E_NO_FREE_PROC;
+    struct proc_struct *proc;
+    if (nr_process >= MAX_PROCESS)
+    {
+        goto fork_out;
+    }
+    ret = -E_NO_MEM;
+    if ((proc = alloc_proc()) == NULL)
+        goto fork_out;
+
+    if (setup_kstack(proc) != 0)
+        goto bad_fork_cleanup_proc;
+
+    if (copy_mm(clone_flags, proc) != 0)
+        goto bad_fork_cleanup_kstack;
+
+    copy_thread(proc, stack, tf);
+
+    proc->pid = get_pid();
+    hash_proc(proc);
+    list_add(&proc_list, &(proc->list_link));
+    nr_process++;
+
+    wakeup_proc(proc);
+    ret = proc->pid;
+
+fork_out:
+    return ret;
+
+bad_fork_cleanup_kstack:
+    put_kstack(proc);
+bad_fork_cleanup_proc:
+    kfree(proc);
+    goto fork_out;
+}
+```
+### 分析
+根据实验指导书的步骤，可以总结 do/_fork 的执行流程如下：
+首先，通过 alloc_proc() 为新进程创建一个空的 proc_struct，用于保存进程的基本信息。如果分配成功，则继续通过 setup_kstack() 为该进程构建内核栈。随后，将新进程的父进程指向当前运行的进程，并调用 copy_mm() 根据 clone_flags 决定是否复制或共享内存管理结构。
+接着，copy_thread() 用于为新建进程设置中断帧（trapframe）和运行上下文，使其能够在被调度后正常运行。完成这些设置后，通过 get_pid() 获取一个新的 PID 并赋给进程。然后将该新进程插入到哈希表和系统的进程链表中，使调度器能够感知它的存在。最后，把进程状态置为 PROC_RUNNABLE，并将其 PID 作为 do/_fork() 的返回值。
+
+### 问题回答
+根据代码中的实现，ucore 确实会给每个新 fork 的线程分配一个唯一的进程 ID（PID），这是由 get_pid() 函数保证的。具体分析如下：
+- 1.初始化变量：系统首先保证 MAX_PID 的取值范围大于最大进程数量MAX_PROCESS。函数内部通过静态变量 last_pid 和 next_safe 来记录最近一次分配和未来安全可分配的 PID 上界。
+- 2.PID分配逻辑：每次调用 get_pid() 时，last_pid 会自增；若超过 MAX_PID，则重新从 1 开始扫描 PID 空间。此时会重置 next_safe 为 MAX_PID，并重新进入检查流程。
+- 3.检查PID的可用性：在扫描阶段，函数会遍历进程链表 proc_list，检查当前 last_pid 是否已被其他进程使用。如果冲突，则继续自增 last_pid，同时利用 next_safe 限制重复分配的范围，确保不会重复使用正在被占用的 PID。
+- 4.返回唯一PID：一旦找到未被占用的PID，函数就返回该PID作为分配给新进程的唯一标识符。
 
 ## 编写proc_run函数
 具体代码实现如下：
-'''
+```
 void proc_run(struct proc_struct *proc)
 {
     if (proc != current)
@@ -68,7 +119,7 @@ void proc_run(struct proc_struct *proc)
 
     }
 }
-'''
+```
 ### 分析
 #### 1.检查进程是否相同
 进程切换开始阶段首先需要判断需要切换的目标进程与当前正在运行的进程是否相同。为同一进程则不需要操作，避免多余的资源消耗。
@@ -103,3 +154,15 @@ void proc_run(struct proc_struct *proc)
 理论依据：
 - 中断响应：禁用中断只是为了保证进程切换的原子性，一旦上下文切换完成，操作系统需要恢复中断处理，以保证外部事件能够得到及时响应。恢复中断确保系统能够处理硬件中断、定时中断、系统调用等外部事件，维持系统的正常调度和操作。
 - 多任务和实时性：一旦进程切换完成并恢复中断，操作系统能够重新处理外部的中断请求，这对于实时操作系统尤其重要，可以确保及时响应定时任务或硬件事件。
+
+### 问题回答
+一共创建了两个线程。第一个是idleproc，在完成新的内核线程的创建以及各种初始化工作之后，进入死循环，用于调度其他进程或线程；第二个是执行init_main的init线程，打印"Hello world!!"。
+```
+// idle proc
+struct proc_struct *idleproc = NULL;
+// init proc
+struct proc_struct *initproc = NULL;
+```
+
+
+## 扩展练习challenge
