@@ -196,6 +196,14 @@ void proc_run(struct proc_struct *proc)
          *   lsatp():                   Modify the value of satp register
          *   switch_to():              Context switching between two processes
          */
+        bool  flag;
+        struct proc_struct* prve=current;
+
+        local_intr_save(flag);
+        current=proc;
+        lastp(current->pgdir);
+        switch_to(&(prve->context),&(current->context));
+        local_intr_restore(flag);
 
     }
 }
