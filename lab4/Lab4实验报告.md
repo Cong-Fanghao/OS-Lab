@@ -42,11 +42,44 @@ get_pte()函数中有两段形式类似的代码， 结合sv32，sv39，sv48的�
 目前get_pte()函数将页表项的查找和页表项的分配合并在一个函数里，你认为这种写法好吗？有没有必要把两个功能拆开？
 
 ## 分配并初始化一个进程控制块
-设计实现过程：
-在 alloc_proc 函数的设计与实现中，主要目标是为一个新的 proc_struct 结构体分配内存并对其所有成员变量进行安全的初始化，以防止后续使用未定义的垃圾数据导致系统崩溃。首先使用 kmalloc 分配内存后，依据 proc_init 函数中的检查逻辑，将进程状态 state 初始化为 PROC_UNINIT，表示进程尚未完成构建；进程 ID pid 设为 -1，表明该进程尚未分配有效的标识符；内核栈 kstack、内存管理结构 mm、父进程指针 parent 以及中断帧指针 tf 均初始化为 0 或 NULL，因为这些资源将在后续的 do_fork 阶段分配。特别地，为了满足系统对干净环境的要求，使用 memset 函数将 context 结构体和 name 字符数组所在的内存区域彻底清零，确保上下文切换和进程名读取时不会受到残留数据的影响。最后，将页目录表 pgdir 指向内核启动页表 boot_pgdir_pa，这是因为在本实验阶段创建的主要是内核线程，它们共享内核的内存空间。
 
-context 与 tf 的含义与作用：
-proc_struct 中的 struct context context 和 struct trapframe *tf 都与保存进程状态有关。context 成员变量保存的是进程的内核上下文，其主要含义是记录进程在内核态停止执行时的关键寄存器状态，包括 ra、sp以及 s0 到 s11 等被调用者保存寄存器。它的作用在于支持进程调度过程中的上下文切换，当调度器调用 switch_to 函数时，会保存当前进程的上下文并恢复新进程的 context，从而使 CPU 的控制流跳转到 context.ra 指向的地址，在本实验中通过 copy_thread 设为 forkret 函数，并将栈切换到新进程的内核栈。而 tf 成员变量是指向进程内核栈顶部的中断帧指针，其含义是保存进程在发生中断、异常或系统调用瞬间的完整执行现场，包括程序计数器 epc、状态寄存器 status 和所有通用寄存器。它的作用在于控制进程具体的执行入口和参数传递，当进程通过 context 切换恢复运行并进入 forkret 函数后，系统会进一步调用 forkrets 将 tf 中保存的数据恢复到 CPU 寄存器中，对于新创建的内核线程，这会使 CPU 跳转到 tf->epc 所指向的 kernel_thread_entry 入口，并传递函数参数，从而真正开始执行线程定义的业务逻辑。简单来说，context 负责将 CPU 切换回进程所在的内核环境，而 tf 负责从内核环境“返回”到进程具体要执行的代码位置。
+1. 设计实现过程
+alloc_proc 函数的设计核心在于创建一个“干净”且状态确定的进程控制块，这是操作系统维持进程管理稳定性的基石。在具体实现中，我们首先通过 kmalloc 分配了一块 struct proc_struct 大小的内存空间。由于 kmalloc 分配的堆内存可能残留之前的垃圾数据，直接使用会导致不可预知的内核错误，因此初始化步骤至关重要。
+
+我们的初始化策略严格遵循了 proc_init 函数中的自检逻辑。首先，将进程生命周期状态 state 显式设定为 PROC_UNINIT，并将 pid 设为 -1，这不仅仅是赋值，更是为了标记该进程结构体尚处于“半成品”状态，避免调度器过早将其纳入调度队列。对于内核栈 kstack、内存管理指针 mm、父进程 parent 和中断帧 tf，我们统一初始化为零值，因为这些资源依赖于后续 do_fork 阶段的动态分配。
+
+特别值得阐述的是对 context 和 name 的处理。我们没有简单地逐个成员赋值，而是使用了 memset 对这两块内存区域进行了字节级的清零。这样做有两个深层原因：其一，context 结构体中可能存在编译器自动填充的对齐字节，如果只初始化成员变量，对齐字节中的垃圾数据会导致 proc_init 中的 memcmp 检查失败；其二，确保 name 字符串以 NULL 结尾，防止打印进程名时发生内存越界。最后，将页表基址 pgdir 指向 boot_pgdir_pa，这意味着新创建的内核线程将共享内核的全局页表，直接映射物理内存，从而能够访问内核的所有代码和数据。
+
+具体代码如下：
+```
+ proc->state = PROC_UNINIT;
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = NULL;
+        proc->mm = NULL;
+        memset(&(proc->context), 0, sizeof(struct context));
+        proc->tf = NULL;
+        proc->pgdir = boot_pgdir_pa;
+        proc->flags = 0;
+        memset(proc->name, 0, PROC_NAME_LEN + 1);
+```
+
+2. context 与 tf 的含义与作用分析
+总结来说，context 负责处理进程 A 切到进程 B的内核控制流转移，而 tf 负责处理“内核环境切入具体执行代码的现场恢复。没有 context，无法切换进程；没有 tf，进程无法知道该从哪里开始执行具体的业务逻辑。在 ucore 的进程管理机制中，struct context context 和 struct trapframe *tf 是两个至关重要但分工截然不同的状态保存结构，它们共同构成了进程切换与执行流恢复的完整链条。
+
+struct context context：
+context 位于进程控制块内部，其本质是进程在内核态之间切换的“锚点”。它专门用于保存被调用者保存寄存器。在本实验中，它的核心作用是服务于操作系统的调度器。当调度器决定暂停当前进程并运行新进程时，会调用 switch_to 函数。该函数利用汇编指令将 CPU 的寄存器快照保存到旧进程的 context 中，并将新进程的 context 加载到 CPU。此时，context.ra起到了关键的“桥梁”作用：对于新创建的进程，我们在 copy_thread 中将其手动构造为指向 forkret 函数。因此，当 switch_to 完成上下文切换的那一刻，CPU 的执行流会“欺骗性”地跳转到 forkret，仿佛进程之前是从那里暂停的一样。
+
+*struct trapframe tf：
+与 context 不同，tf 指针指向进程内核栈的高地址顶部，保存的是一个完整的硬件执行现场。它涵盖了所有通用寄存器、epc以及status，通常由硬件中断或软件异常触发时建立。在本实验的内核线程创建过程中，tf 的作用是模拟一个“假”的中断现场。我们在 kernel_thread 中预先填充了 tf，将其 epc 指向 kernel_thread_entry，并将函数参数放置在参数寄存器中。
+
+两者的协作关系：
+这两个结构体在进程启动时呈现出一种“接力”关系。
+
+第一阶段： 调度器利用 context 将 CPU 的栈指针切换到新进程的内核栈，并将指令指针引导至 forkret 函数。
+第二阶段： forkret 函数随后依据 tf 指针，调用 forkrets，即中断返回逻辑。这会把 tf 中保存的寄存器值全部恢复到 CPU 中，最终通过 sret 指令将 PC 跳转到 tf->epc。
 
 ## 为新创建的内核线程分配资源
 具体实现代码如下
