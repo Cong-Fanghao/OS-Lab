@@ -111,16 +111,6 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
 
     wakeup_proc(proc);
     ret = proc->pid;
-
-fork_out:
-    return ret;
-
-bad_fork_cleanup_kstack:
-    put_kstack(proc);
-bad_fork_cleanup_proc:
-    kfree(proc);
-    goto fork_out;
-}
 ```
 ### 分析
 根据实验指导书的步骤，可以总结 do/_fork 的执行流程如下：
@@ -199,3 +189,20 @@ struct proc_struct *initproc = NULL;
 
 
 ## 扩展练习challenge
+### 开关中断实现原理
+这里local_intr_save(intr_flag);....local_intr_restore(intr_flag)是取当前SIE位状态后，调用了一个内联函数，这个内联函数可以更改sstatus寄存器的值，相关代码如下：
+```
+static inline bool __intr_save(void) {
+    if (read_csr(sstatus) & SSTATUS_SIE) {
+        intr_disable();
+        return 1;
+    }
+    return 0;
+}
+```
+操作RISC-V的sstatus寄存器中的SSTATUS_SIE位控制中断使能，当需要关闭中断的时候，都会保存一下现在是SIE位，然后把这个SIE置0，禁用中断，等到完成指令想要恢复中断的时候，就恢复SIE到原来的值。这样就完成了函数的开关。
+
+### 深入理解不同分页模式的工作原理
+两段代码相似的根本原因是多级页表查询时做的操作是相似的，从satp寄存器出发，通过PPN[2]找到大大页的偏移量，然后再进入大大页，根据地址信息和偏移量信息找到一个地址，从中再读取大页的偏移量，这是一个类似于递归的过程，每一级的查询逻辑是相同的。
+
+我认为get_pte把查找和分配统一起来是好的，一方面，对于页表项的映射的创建是一个原子过程，需要涉及到关中断和开中断，对于内核来说，把这两项放在一起很安全；另一方面，虽然这里一个函数完成两个工作，但是函数给了一个create标记位，给我们提供了一个是否创建的接口，在选择不创建时，它仅仅在进行if判断时多了一个条件，这个开销和安全相比影响很小。可能对于更高级的管理方式把函数拆分一下更好，但是这里看来拆分函数是完全没有必要的。
