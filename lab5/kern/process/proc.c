@@ -716,6 +716,16 @@ load_icode(unsigned char *binary, size_t size)
      *          tf->status should be appropriate for user program (the value of sstatus)
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
+    // 设置用户栈指针为用户栈顶
+    tf->gpr.sp = USTACKTOP;
+
+    // 设置程序入口点（sepc），即ELF文件的入口地址
+    tf->epc = elf->e_entry;
+
+    // 设置sstatus寄存器：
+    // - 清除SPP位（SPP=0表示返回用户态U-mode）
+    // - 设置SPIE位（SPIE=1表示sret返回后启用中断）
+    tf->status = (sstatus & ~SSTATUS_SPP) | SSTATUS_SPIE;
 
     ret = 0;
 out:
