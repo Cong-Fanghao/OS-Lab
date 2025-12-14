@@ -26,7 +26,7 @@ static void print_ticks()
     panic("EOT: kernel seems ok.");
 #endif
 }
-
+extern int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr);
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void idt_init(void)
 {
@@ -117,28 +117,18 @@ void interrupt_handler(struct trapframe *tf)
         cprintf("User software interrupt\n");
         break;
     case IRQ_S_TIMER:
-        // "All bits besides SSIP and USIP in the sip register are
-        // read-only." -- privileged spec1.9.1, 4.1.4, p59
-        // In fact, Call sbi_set_timer will clear STIP, or you can clear it
-        // directly.
-        // cprintf("Supervisor timer interrupt\n");
-        /* LAB3 EXERCISE1   YOUR CODE :  */
-        /*(1)设置下次时钟中断- clock_set_next_event()
-         *(2)计数器（ticks）加一
-         *(3)当计数器加到100的时候，我们会输出一个`100ticks`表示我们触发了100次时钟中断，同时打印次数（num）加一
-         * (4)判断打印次数，当打印次数为10时，调用<sbi.h>中的关机函数关机
-         */
+        /* LAB5 GRADE   YOUR CODE :  */
+        /* 时间片轮转：
+         *(1) 设置下一次时钟中断（clock_set_next_event）
+         *(2) ticks 计数器自增
+         *(3) 每 TICK_NUM 次中断（如 100 次），进行判断当前是否有进程正在运行，如果有则标记该进程需要被重新调度（current->need_resched）
+        */
         clock_set_next_event();
         ticks++;
-        if (ticks == TICK_NUM)
+        if (ticks % TICK_NUM == 0)
         {
-            print_ticks();
-            ticks = 0;
-            num++;
-            if (num == 10)
-            {
-                sbi_shutdown();
-            }
+            assert(current != NULL);
+            current->need_resched = 1;
         }
         break;
     case IRQ_H_TIMER:
@@ -165,6 +155,29 @@ void interrupt_handler(struct trapframe *tf)
     }
 }
 void kernel_execve_ret(struct trapframe *tf, uintptr_t kstacktop);
+static int pgfault_handler(struct trapframe *tf)
+{
+    extern struct mm_struct *check_mm_struct;
+    struct mm_struct *mm;
+
+    if (check_mm_struct != NULL)
+    {
+        assert(current == NULL);
+        mm = check_mm_struct;
+    }
+    else
+    {
+        if (current == NULL)
+        {
+            print_trapframe(tf);
+            print_regs(&tf->gpr);
+            panic("unhandled page fault.\n");
+        }
+        mm = current->mm;
+    }
+
+    return do_pgfault(mm, tf->cause, tf->tval);
+}
 void exception_handler(struct trapframe *tf)
 {
     int ret;

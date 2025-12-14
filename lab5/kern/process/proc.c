@@ -89,7 +89,7 @@ alloc_proc(void)
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL)
     {
-        // LAB4:EXERCISE1 YOUR CODE
+        // LAB4:EXERCISE1 2312479
         /*
          * below fields in proc_struct need to be initialized
          *       enum proc_state state;                      // Process state
@@ -106,7 +106,7 @@ alloc_proc(void)
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
 
-        // LAB5 YOUR CODE : (update LAB4 steps)
+        // LAB5 2312479 : (update LAB4 steps)
         /*
          * below fields(add in LAB5) in proc_struct need to be initialized
          *       uint32_t wait_state;                        // waiting state
@@ -115,15 +115,23 @@ alloc_proc(void)
         proc->state = PROC_UNINIT;
         proc->pid = -1;
         proc->runs = 0;
+        proc->need_resched = 0; 
+
         proc->kstack = 0;
-        proc->need_resched = 0;
-        proc->parent = NULL;
         proc->mm = NULL;
-        memset(&(proc->context), 0, sizeof(struct context));
-        proc->tf = NULL;
         proc->pgdir = boot_pgdir_pa;
+
+        proc->parent = NULL;
         proc->flags = 0;
-        memset(proc->name, 0, PROC_NAME_LEN + 1);
+        proc->wait_state = 0;
+        proc->exit_code = 0;
+        proc->cptr = proc->optr = proc->yptr = NULL;
+        memset(proc->name, 0, sizeof(proc->name));
+
+        memset(&proc->context, 0, sizeof(proc->context));
+        proc->tf = NULL;
+        list_init(&(proc->list_link));
+        list_init(&(proc->hash_link));
     }
     return proc;
 }
@@ -228,7 +236,7 @@ void proc_run(struct proc_struct *proc)
 {
     if (proc != current)
     {
-        // LAB4:EXERCISE3 YOUR CODE
+        // LAB4:2312594 YOUR CODE
         /*
          * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
          * MACROs or Functions:
@@ -428,7 +436,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
         goto fork_out;
     }
     ret = -E_NO_MEM;
-    // LAB4:EXERCISE2 YOUR CODE
+    // LAB4:EXERCISE2 2312594
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
      * MACROs or Functions:
@@ -454,7 +462,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
 
-    // LAB5 YOUR CODE : (update LAB4 steps)
+    // LAB5 2312594 : (update LAB4 steps)
     // TIPS: you should modify your written code in lab4(step1 and step5), not add more code.
     /* Some Functions
      *    set_links:  set the relation links of process.  ALSO SEE: remove_links:  lean the relation links of process
@@ -471,16 +479,20 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
     if (copy_mm(clone_flags, proc) != 0)
         goto bad_fork_cleanup_kstack;
 
-    copy_thread(proc, stack, tf);
+    bool flag;
+    local_intr_save(flag);
 
+    proc->parent = current;
+    current->wait_state = 0;
     proc->pid = get_pid();
-    hash_proc(proc);
-    list_add(&proc_list, &(proc->list_link));
-    nr_process++;
 
+    copy_thread(proc, stack, tf);
+    hash_proc(proc);
+    set_links(proc);
     wakeup_proc(proc);
+
+    local_intr_restore(flag);
     ret = proc->pid;
-    
 
 fork_out:
     return ret;
@@ -708,7 +720,7 @@ load_icode(unsigned char *binary, size_t size)
     // Keep sstatus
     uintptr_t sstatus = tf->status;
     memset(tf, 0, sizeof(struct trapframe));
-    /* LAB5:EXERCISE1 YOUR CODE
+    /* LAB5:EXERCISE1 2310682
      * should set tf->gpr.sp, tf->epc, tf->status
      * NOTICE: If we set trapframe correctly, then the user level process can return to USER MODE from kernel. So
      *          tf->gpr.sp should be user stack top (the value of sp)
@@ -716,16 +728,10 @@ load_icode(unsigned char *binary, size_t size)
      *          tf->status should be appropriate for user program (the value of sstatus)
      *          hint: check meaning of SPP, SPIE in SSTATUS, use them by SSTATUS_SPP, SSTATUS_SPIE(defined in risv.h)
      */
-    // 设置用户栈指针为用户栈顶
     tf->gpr.sp = USTACKTOP;
 
-    // 设置程序入口点（sepc），即ELF文件的入口地址
     tf->epc = elf->e_entry;
-
-    // 设置sstatus寄存器：
-    // - 清除SPP位（SPP=0表示返回用户态U-mode）
-    // - 设置SPIE位（SPIE=1表示sret返回后启用中断）
-    tf->status=sstatus;
+    tf->status = sstatus;
     tf->status &= ~SSTATUS_SPP;
     tf->status |= SSTATUS_SPIE;
 

@@ -382,3 +382,110 @@ bool user_mem_check(struct mm_struct *mm, uintptr_t addr, size_t len, bool write
     }
     return KERN_ACCESS(addr, addr + len);
 }
+
+int do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr)
+{
+    int ret = -E_INVAL;
+    struct vma_struct *vma = find_vma(mm, addr);
+
+    pgfault_num++;
+    if (vma == NULL || vma->vm_start > addr)
+    {
+        cprintf("not valid addr %x, and  can not find it in vma\n", addr);
+        goto failed;
+    }
+
+    switch (error_code & 3)
+    {
+    default:
+    case 2:
+        if (!(vma->vm_flags & VM_WRITE))
+        {
+            cprintf("do_pgfault failed: write error, addr=%x\n", addr);
+            goto failed;
+        }
+        break;
+    case 1: 
+        cprintf("do_pgfault failed: read present error, addr=%x\n", addr);
+        goto failed;
+    case 0:
+        if (!(vma->vm_flags & (VM_READ | VM_EXEC)))
+        {
+            cprintf("do_pgfault failed: read no-present error, addr=%x\n", addr);
+            goto failed;
+        }
+    }
+
+    uint32_t perm = PTE_U;
+    if (vma->vm_flags & VM_READ)
+    {
+        perm |= PTE_R;
+    }
+    if (vma->vm_flags & VM_WRITE)
+    {
+        perm |= PTE_W;
+    }
+    addr = ROUNDDOWN(addr, PGSIZE);
+    ret = -E_NO_MEM;
+
+    pte_t *ptep = NULL;
+
+    if ((ptep = get_pte(mm->pgdir, addr, 1)) == NULL)
+    {
+        cprintf("get_pte in do_pgfault failed\n");
+        goto failed;
+    }
+
+    if ((*ptep & PTE_V) && (error_code & 2) && !(*ptep & PTE_W))
+    {
+
+        struct Page *page = pte2page(*ptep);
+
+        if (page_ref(page) == 1)
+        {
+            page_insert(mm->pgdir, page, addr, perm | PTE_W);
+            return 0;
+        }
+
+        struct Page *npage = alloc_page();
+        if (npage == NULL)
+        {
+            cprintf("alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
+
+        assert(page != NULL);
+        assert(npage != NULL);
+
+        void *src_kvaddr = page2kva(page);
+        void *dst_kvaddr = page2kva(npage);
+        memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
+
+        if (page_insert(mm->pgdir, npage, addr, perm | PTE_W) != 0)
+        {
+            cprintf("page_insert in do_pgfault failed\n");
+            free_page(npage);
+            goto failed;
+        }
+
+        return 0;
+    }
+
+    if (*ptep == 0)
+    {
+        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL)
+        {
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
+    }
+    else
+    {
+        cprintf("do_pgfault error: PTE exists but not COW. addr=%x, *ptep=%x\n", addr, *ptep);
+        goto failed;
+    }
+
+    ret = 0;
+failed:
+    return ret;
+}

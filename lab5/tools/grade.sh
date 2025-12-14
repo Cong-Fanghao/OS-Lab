@@ -53,7 +53,7 @@ else
 fi
 
 ## default variables
-default_timeout=90
+default_timeout=30
 default_pts=5
 
 pts=5
@@ -455,6 +455,10 @@ run_test -prog 'forktest'   -check default_check                                
     !   'wait got too many'                                     \
     ! - 'user panic at .*'
 
+pts=10
+
+run_test -prog 'cow'   -check default_check                     \
+        'cow success!'
 
 ## print final-score
 show_final
