@@ -7,6 +7,7 @@
 #include <pmm.h>
 #include <riscv.h>
 #include <kmalloc.h>
+#include <proc.h>
 
 /*
   vmm design include two parts: mm_struct (mm) & vma_struct (vma)
@@ -33,7 +34,8 @@
      void check_vma_struct(void);
      void check_pgfault(void);
 */
-
+struct mm_struct *check_mm_struct = NULL;
+volatile unsigned int pgfault_num = 0;
 static void check_vmm(void);
 static void check_vma_struct(void);
 

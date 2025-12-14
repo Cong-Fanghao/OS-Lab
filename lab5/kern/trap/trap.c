@@ -15,6 +15,7 @@
 #include <sched.h>
 #include <sync.h>
 #include <sbi.h>
+#include <vmm.h>
 
 #define TICK_NUM 100
 
