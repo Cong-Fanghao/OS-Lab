@@ -725,7 +725,9 @@ load_icode(unsigned char *binary, size_t size)
     // 设置sstatus寄存器：
     // - 清除SPP位（SPP=0表示返回用户态U-mode）
     // - 设置SPIE位（SPIE=1表示sret返回后启用中断）
-    tf->status = (sstatus & ~SSTATUS_SPP) | SSTATUS_SPIE;
+    tf->status=sstatus;
+    tf->status &= ~SSTATUS_SPP;
+    tf->status |= SSTATUS_SPIE;
 
     ret = 0;
 out:
