@@ -725,6 +725,7 @@ load_icode(int fd, int argc, char **kargv)
 
     int ret = -E_NO_MEM;
     struct mm_struct *mm = NULL;
+    
     struct Page *page = NULL;
     struct elfhdr elf;
     struct proghdr ph;
