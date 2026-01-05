@@ -140,3 +140,117 @@ memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
 
 ret = page_insert(to, npage, start, perm);
 ```
+# 操作系统实验报告：GDB调试与进程加载机制分析
+
+## 一、实验目的
+1. 掌握在QEMU中通过GDB调试操作系统内核的方法；
+2. 理解TLB未命中时的页表查询与填充流程；
+3. 分析ECALL异常的处理与特权级切换过程；
+4. 理解uCore中用户程序的加载机制及其与常见操作系统的区别。
+
+## 二、实验环境
+- 操作系统：Ubuntu（WSL2）
+- 调试工具：GDB 15.0.50
+- 模拟器：QEMU 4.1.0（RISC-V架构）
+- 目标系统：uCore Lab5
+
+## 三、实验步骤与结果
+
+### 1. TLB未命中调试
+
+#### 实验过程：
+1. 启动QEMU并附加GDB：
+```
+make debug
+pgrep -f qemu-system-riscv64
+sudo gdb
+attach <PID>
+handle SIGPIPE nostop noprint
+c
+在ucore端设置断点并单步执行：
+
+make gdb
+set remotetimeout unlimited
+b kern_init
+x/8i $pc
+si
+在QEMU端设置TLB相关断点：
+
+b get_physical_address
+b riscv_cpu_tlb_fill
+b tlb_set_page
+c
+调试结果：
+当CPU执行存储指令时，虚拟地址0xFFFFFFFFC020AFE8触发TLB未命中。
+调用链为：tlb_hit失败 → riscv_cpu_tlb_fill → get_physical_address → tlb_set_page。
+get_physical_address成功查询页表，返回物理地址与权限位。
+tlb_set_page将映射关系存入QEMU软TLB中，记录页对齐的虚拟地址、物理地址、权限位（prot=7）和页面大小（4096）。
+
+关键函数分析：
+get_physical_address：
+从satp寄存器获取页表基地址；
+根据SV39分页模式进行三级页表遍历；
+检查PTE有效性、权限位（R/W/X）、用户位（U）等；
+返回物理地址和保护位。
+
+tlb_set_page：
+将虚拟地址到物理地址的映射存入TLB；
+支持大页映射；
+记录访问权限（读、写、执行）。
+
+2. ECALL异常处理调试
+实验过程：
+在用户程序syscall.c中设置断点：
+
+add-symbol-file obj/__user_exit.out
+break user/libs/syscall.c:18
+c
+x/8i $pc
+si    # 执行至ecall指令
+在QEMU中设置中断处理断点：
+
+break riscv_cpu_do_interrupt
+c
+查看异常信息：
+
+print cs->exception_index   # 若为8，表示User ECALL
+print ((RISCVCPU *)cs)->env.priv   # 查看当前特权级
+调试结果：
+cs->exception_index为8，表示用户态ECALL。
+
+env->priv为0（用户态）。
+
+异常处理流程：
+读取scause、sepc、stval；
+根据medeleg判断是否委托给S模式；
+保存上下文到sstatus、sepc、scause；
+跳转到stvec指向的异常入口（__alltraps）；
+切换特权级至S模式。
+
+返回用户态过程：
+执行helper_sret：
+从sepc恢复PC；
+恢复mstatus中的SPIE、SPP位；
+切换特权级回U模式。
+
+3. 用户程序加载机制分析
+问题：
+用户程序何时被预先加载到内存？与常用操作系统的加载有何区别？
+
+回答：
+加载时机：
+在uCore Lab5中，用户程序在内核编译链接阶段被打包进内核镜像；
+系统启动时，Bootloader将整个内核镜像（含用户程序）加载到物理内存。
+实现方式：
+Makefile中使用--format=binary选项将用户程序ELF文件作为二进制数据段链接进内核；
+内核通过链接器生成的符号（如_binary_obj__user_hello_out_start）直接访问内存中的用户程序数据。
+
+原因：
+简化实验难度：避免在进程管理实验前依赖文件系统与磁盘驱动；
+聚焦核心目标：Lab5重点在于进程管理（fork、exec、调度等），而非文件系统。
+
+四、实验心得
+通过GDB调试深入理解了TLB未命中时的硬件模拟查询流程；
+掌握了ECALL异常从触发、处理到返回的全过程，包括特权级切换与上下文保存；
+认识到uCore为教学简化而采用的内嵌式用户程序加载方式，与实际操作系统按需加载的区别；
+实验过程中熟悉了多终端协同调试的方法，提升了操作系统级调试能力。

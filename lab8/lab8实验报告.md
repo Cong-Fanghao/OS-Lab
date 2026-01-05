@@ -97,7 +97,119 @@ ino：物理块号
 size：当前操作的数据大小
 alen：实际读取的总字节数
 6. 实验结果
-编译并运行 uCore，执行 make grade 验证实验结果正确。
+cong@cong-VMware-Virtual-Platform:~/OS/labcode/lab8$ make grade
+tools/mksfs.c:33: warning: "static_assert" redefined
+   33 | #define static_assert(x)                                                                \
+      | 
+In file included from tools/mksfs.c:13:
+/usr/include/assert.h:158: note: this is the location of the previous definition
+  158 | # define static_assert _Static_assert
+      | 
+输入了 8+0 块记录
+输出了 8+0 块记录
+32000 字节 (32 kB, 31 KiB) 已复制，0.000123112 s，260 MB/s
+user/libs/ulib.c: In function 'waitpid':
+user/libs/ulib.c:26:26: warning: passing argument 2 of 'sys_wait' from incompatible pointer type [-Wincompatible-pointer-types]
+   26 |     return sys_wait(pid, store);
+      |                          ^~~~~
+      |                          |
+      |                          int *
+In file included from user/libs/ulib.c:2:
+user/libs/syscall.h:6:36: note: expected 'int64_t *' {aka 'long long int *'} but argument is of type 'int *'
+    6 | int sys_wait(int64_t pid, int64_t *store);
+      |                           ~~~~~~~~~^~~~~
+user/libs/umain.c: In function 'initfd':
+user/libs/umain.c:10:14: warning: 'ret' may be used uninitialized in this function [-Wmaybe-uninitialized]
+   10 |     int fd1, ret;
+      |              ^~~
+user/sh.c: In function 'runcmd':
+user/sh.c:157:28: warning: 'p[0]' may be used uninitialized in this function [-Wmaybe-uninitialized]
+  157 |                 if ((ret = dup2(p[0], 0)) < 0) {
+      |                            ^~~~~~~~~~~~~
+user/sh.c:160:30: warning: 'p[1]' may be used uninitialized in this function [-Wmaybe-uninitialized]
+  160 |                 close(p[0]), close(p[1]);
+      |                              ^~~~~~~~~~~
+user/testbss.c: In function 'main':
+user/testbss.c:29:13: warning: array subscript 1049600 is above array bounds of 'uint32_t[1048576]' {aka 'unsigned int[1048576]'} [-Warray-bounds]
+   29 |     bigarray[ARRAYSIZE + 1024] = 0;
+      |     ~~~~~~~~^~~~~~~~~~~~~~~~~~
+user/testbss.c:6:10: note: while referencing 'bigarray'
+    6 | uint32_t bigarray[ARRAYSIZE];
+      |          ^~~~~~~~
+输入了 480+0 块记录
+输出了 480+0 块记录
+480000 字节 (480 kB, 469 KiB) 已复制，0.000973739 s，493 MB/s
+kern/trap/trap.c: In function 'interrupt_handler':
+kern/trap/trap.c:128:9: warning: implicit declaration of function 'dev_stdin_write' [-Wimplicit-function-declaration]
+  128 |         dev_stdin_write(cons_getc());
+      |         ^~~~~~~~~~~~~~~
+kern/mm/kmalloc.c: In function '__slob_free_pages':
+kern/mm/kmalloc.c:92:22: warning: passing argument 1 of 'kva2page' makes pointer from integer without a cast [-Wint-conversion]
+   92 |  free_pages(kva2page(kva), 1 << order);
+      |                      ^~~
+      |                      |
+      |                      long unsigned int
+In file included from kern/mm/kmalloc.c:7:
+kern/mm/pmm.h:117:16: note: expected 'void *' but argument is of type 'long unsigned int'
+  117 | kva2page(void *kva)
+      |          ~~~~~~^~~
+kern/mm/pmm.c: In function 'switch_kernel_memorylayout':
+kern/mm/pmm.c:219:41: warning: passing argument 2 of 'boot_map_segment' makes integer from pointer without a cast [-Wint-conversion]
+  219 |         boot_map_segment(boot_pgdir_va, bootstackguard, PGSIZE, PADDR(bootstackguard), 0);
+      |                                         ^~~~~~~~~~~~~~
+      |                                         |
+      |                                         char *
+kern/mm/pmm.c:146:54: note: expected 'uintptr_t' {aka 'long long unsigned int'} but argument is of type 'char *'
+  146 | static void boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size,
+      |                                            ~~~~~~~~~~^~
+kern/mm/pmm.c:220:41: warning: passing argument 2 of 'boot_map_segment' makes integer from pointer without a cast [-Wint-conversion]
+  220 |         boot_map_segment(boot_pgdir_va, boot_page_table_sv39, PGSIZE, PADDR(boot_page_table_sv39), 0);
+      |                                         ^~~~~~~~~~~~~~~~~~~~
+      |                                         |
+      |                                         char *
+kern/mm/pmm.c:146:54: note: expected 'uintptr_t' {aka 'long long unsigned int'} but argument is of type 'char *'
+  146 | static void boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size,
+      |                                            ~~~~~~~~~~^~
+kern/mm/pmm.c: In function 'pmm_init':
+kern/mm/pmm.c:215:18: warning: array subscript -1 is below array bounds of 'char[]' [-Warray-bounds]
+  215 |         bootstack[-1] = 0;
+      |         ~~~~~~~~~^~~~
+In file included from kern/mm/default_pmm.h:4,
+                 from kern/mm/pmm.c:1:
+kern/mm/pmm.h:180:13: note: while referencing 'bootstack'
+  180 | extern char bootstack[], bootstacktop[];
+      |             ^~~~~~~~~
+kern/mm/pmm.c:216:18: warning: array subscript -4096 is below array bounds of 'char[]' [-Warray-bounds]
+  216 |         bootstack[-PGSIZE] = 0;
+      |         ~~~~~~~~~^~~~~~~~~
+In file included from kern/mm/default_pmm.h:4,
+                 from kern/mm/pmm.c:1:
+kern/mm/pmm.h:180:13: note: while referencing 'bootstack'
+  180 | extern char bootstack[], bootstacktop[];
+      |             ^~~~~~~~~
+kern/sync/check_sync.c: In function 'philosopher_using_semaphore':
+kern/sync/check_sync.c:115:7: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+  115 |     i=(int)arg;
+      |       ^
+kern/sync/check_sync.c: In function 'philosopher_using_condvar':
+kern/sync/check_sync.c:220:7: warning: cast from pointer to integer of different size [-Wpointer-to-int-cast]
+  220 |     i=(int)arg;
+      |       ^
+kern/sync/check_sync.c: In function 'check_sync':
+kern/sync/check_sync.c:245:62: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  245 |         int pid = kernel_thread(philosopher_using_semaphore, (void *)i, 0);
+      |                                                              ^
+kern/sync/check_sync.c:260:60: warning: cast to pointer from integer of different size [-Wint-to-pointer-cast]
+  260 |         int pid = kernel_thread(philosopher_using_condvar, (void *)i, 0);
+      |                                                            ^
+kern/fs/swap/swapfs.c: In function 'swapfs_read':
+kern/fs/swap/swapfs.c:20:39: warning: implicit declaration of function 'swap_offset' [-Wimplicit-function-declaration]
+   20 |     return ide_read_secs(SWAP_DEV_NO, swap_offset(entry) * PAGE_NSECT, page2kva(page), PAGE_NSECT);
+      |                                       ^~~~~~~~~~~
+gmake[1]: 进入目录“/home/cong/OS/labcode/lab8” + cc tools/mksfs.c + cc user/badarg.c + cc user/libs/dir.c + cc user/libs/file.c + cc user/libs/initcode.S + cc user/libs/panic.c + cc user/libs/stdio.c + cc user/libs/syscall.c + cc user/libs/ulib.c + cc user/libs/umain.c + cc libs/hash.c + cc libs/printfmt.c + cc libs/rand.c + cc libs/string.c + cc user/badsegment.c + cc user/divzero.c + cc user/exit.c + cc user/faultread.c + cc user/faultreadkernel.c + cc user/forktest.c + cc user/forktree.c + cc user/hello.c + cc user/matrix.c + cc user/pgdir.c + cc user/priority.c + cc user/sh.c + cc user/sleep.c + cc user/sleepkill.c + cc user/softint.c + cc user/spin.c + cc user/testbss.c + cc user/waitkill.c + cc user/yield.c create bin/sfs.img (disk0) successfully. + cc kern/init/entry.S + cc kern/init/init.c + cc kern/libs/readline.c + cc kern/libs/stdio.c + cc kern/libs/string.c + cc kern/debug/kdebug.c + cc kern/debug/kmonitor.c + cc kern/debug/panic.c + cc kern/driver/clock.c + cc kern/driver/console.c + cc kern/driver/dtb.c + cc kern/driver/ide.c + cc kern/driver/intr.c + cc kern/driver/picirq.c + cc kern/driver/ramdisk.c + cc kern/trap/trap.c + cc kern/trap/trapentry.S + cc kern/mm/default_pmm.c + cc kern/mm/kmalloc.c + cc kern/mm/pmm.c + cc kern/mm/vmm.c + cc kern/sync/check_sync.c + cc kern/sync/monitor.c + cc kern/sync/sem.c + cc kern/sync/wait.c + cc kern/fs/file.c + cc kern/fs/fs.c + cc kern/fs/iobuf.c + cc kern/fs/sysfile.c + cc kern/process/entry.S + cc kern/process/proc.c + cc kern/process/switch.S + cc kern/schedule/default_sched.c + cc kern/schedule/default_sched_stride.c + cc kern/schedule/sched.c + cc kern/syscall/syscall.c + cc kern/fs/swap/swapfs.c + cc kern/fs/vfs/inode.c + cc kern/fs/vfs/vfs.c + cc kern/fs/vfs/vfsdev.c + cc kern/fs/vfs/vfsfile.c + cc kern/fs/vfs/vfslookup.c + cc kern/fs/vfs/vfspath.c + cc kern/fs/devs/dev.c + cc kern/fs/devs/dev_disk0.c + cc kern/fs/devs/dev_stdin.c + cc kern/fs/devs/dev_stdout.c + cc kern/fs/sfs/bitmap.c + cc kern/fs/sfs/sfs.c + cc kern/fs/sfs/sfs_fs.c + cc kern/fs/sfs/sfs_inode.c + cc kern/fs/sfs/sfs_io.c + cc kern/fs/sfs/sfs_lock.c + ld bin/kernel riscv64-unknown-elf-objcopy bin/kernel --strip-all -O binary bin/ucore.img gmake[1]: 离开目录“/home/cong/OS/labcode/lab8”
+  -sh execve:                                OK
+  -user sh :                                 OK
+Total Score: 100/100
 
 7. 问题回答：UNIX的PIPE机制概要设计方案
 数据结构设计：
@@ -365,7 +477,64 @@ a1 = uargv_ptr：参数数组指针
 sp：用户栈指针
 epc：程序入口地址
 7. 实验结果
-执行 make qemu 后，可以看到 sh 用户程序的执行界面，在 sh 中可以执行 hello、exit 等用户程序，说明基于文件系统的执行程序机制实现成功。
+OpenSBI v0.4 (Jul  2 2019 11:53:53)
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name          : QEMU Virt Machine
+Platform HART Features : RV64ACDFIMSU
+Platform Max HARTs     : 8
+Current Hart           : 0
+Firmware Base          : 0x80000000
+Firmware Size          : 112 KB
+Runtime SBI Version    : 0.1
+
+PMP0: 0x0000000080000000-0x000000008001ffff (A)
+PMP1: 0x0000000000000000-0xffffffffffffffff (A,R,W,X)
+(THU.CST) os is loading ...
+
+Special kernel symbols:
+  entry  0xc020004a (virtual)
+  etext  0xc020b4e4 (virtual)
+  edata  0xc0291060 (virtual)
+  end    0xc0296910 (virtual)
+Kernel executable memory footprint: 603KB
+DTB Init
+HartID: 0
+DTB Address: 0x82200000
+Physical Memory from DTB:
+  Base: 0x0000000080000000
+  Size: 0x0000000008000000 (128 MB)
+  End:  0x0000000087ffffff
+DTB init completed
+memory management: default_pmm_manager
+physcial memory map:
+  memory: 0x08000000, [0x80000000, 0x87ffffff].
+vapaofset is 18446744070488326144
+check_alloc_page() succeeded!
+Page table directory switch succeeded!
+Kernel stack guardians set succeeded!
+check_pgdir() succeeded!
+check_boot_pgdir() succeeded!
+use SLOB allocator
+kmalloc_init() succeeded!
+check_vma_struct() succeeded!
+check_vmm() succeeded.
+sched class: RR_scheduler
+Initrd: 0xc0214010 - 0xc021bd0f, size: 0x00007d00
+Initrd: 0xc021bd10 - 0xc029100f, size: 0x00075300
+sfs: mount: 'simple file system' (106/11/117)
+vfs: mount disk0.
+++ setup timer interrupts
+kernel_execve: pid = 2, name = "sh".
+user sh is running!!!
+$
 
 扩展练习 Challenge1：完成基于"UNIX的PIPE机制"的设计方案
 1. PIPE机制概述
